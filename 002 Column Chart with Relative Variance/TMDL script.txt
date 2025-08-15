@@ -1,0 +1,253 @@
+createOrReplace
+
+	ref table _Measures
+
+		measure '01. Month ≤ Selected Month' = ```
+				
+				// This measure checks whether the month from the supplemental date table is less than or equal to the month currently selected in the main date table
+				// Used as filter in measures to limit Data Labels so they are only shown up to the selected month
+				VAR __SelectedMonth = MAX ( dim_calendar[Date] )
+				VAR __SupplMonth = MAX ( dim_calendar_supplemental[Date] )
+				
+				VAR __Result = 
+				    IF ( 
+				        __SupplMonth <= __SelectedMonth, 
+				        1, 
+				        0 
+				    )
+				
+				RETURN __Result
+				```
+			formatString: 0
+			displayFolder: __TMDL Column Variance Chart
+
+		measure '02. Actual Value' = ```
+				
+				// show Actuals up to the selected period
+				VAR __StartDate =
+				    STARTOFYEAR ( dim_calendar[Date] )
+				VAR __EndDate =
+				    MAX ( dim_calendar[Date] )
+				VAR __DateRange =
+				    DATESBETWEEN ( dim_calendar[Date], __StartDate, __EndDate )
+				VAR __Result =
+				    CALCULATE (
+				        [_Revenue],
+				        __DateRange,
+				        USERELATIONSHIP ( 'dim_calendar_supplemental'[Date], 'dim_calendar'[Date] )
+				    )
+				RETURN
+				    __Result
+				
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '03. Comparison Value' = ```
+				
+				// Show Comparison value for all months
+				VAR __StartDate =
+				    STARTOFYEAR ( dim_calendar[Date] )
+				VAR __EndDate =
+				    ENDOFYEAR ( dim_calendar[Date] )
+				VAR __DateRange =
+				    DATESBETWEEN ( dim_calendar[Date], __StartDate, __EndDate )
+				VAR __Result =
+				    CALCULATE (
+				        [_Revenue PY],
+				        __DateRange,
+				        USERELATIONSHIP ( 'dim_calendar_supplemental'[Date], 'dim_calendar'[Date] )
+				    )
+				RETURN
+				    __Result
+				
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '04. Data label Position abs. var.' = ```
+				
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __Comparison = [03. Comparison Value]
+				VAR __Actual = [02. Actual Value]
+				VAR __MaxValue =
+				    MAX ( __Comparison, __Actual )
+				VAR __Result =
+				    IF ( __IsHistoricalMonth = 1, __MaxValue, BLANK () )
+				RETURN
+				    __Result
+				
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '05. Data label Value abs. var.' = ```
+				
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __Actual = [02. Actual Value]
+				VAR __Comparison = [03. Comparison Value]
+				VAR __Variance = __Actual - __Comparison
+				VAR __Result =
+				    IF ( __IsHistoricalMonth = 1, __Variance, BLANK () )
+				RETURN
+				    __Result
+				
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '06. Max Value of Columns' = ```
+				
+				VAR __MAX_Value_Actual =   
+				    MAXX ( 
+				        ALLSELECTED ( 'dim_calendar_supplemental'[Month Number], 'dim_calendar_supplemental'[Month] ), 
+				        [02. Actual Value] 
+				    )
+				VAR __MAX_Value_Comparison =   
+				    MAXX ( 
+				        ALLSELECTED ( 'dim_calendar_supplemental'[Month Number], 'dim_calendar_supplemental'[Month] ), 
+				        [03. Comparison Value] 
+				    )
+				VAR __Result = MAX(__MAX_Value_Actual, __MAX_Value_Comparison)
+				RETURN __Result
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '07. Ref. line Position pos. rel. var %' = ```
+				
+				[06. Max Value of Columns] * 1.95
+				
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '08. Ref. line Position neg. rel. var %' =
+				
+				[06. Max Value of Columns] * 1.95
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '09. Data label Value pos. rel. var. %' = ```
+				
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __Actual = [02. Actual Value]
+				VAR __Comparison = [03. Comparison Value]
+				VAR __Variance = __Actual - __Comparison
+				VAR __RelativeVariance = DIVIDE ( __Variance, __Comparison )
+				
+				VAR __Result = 
+				    IF ( 
+				        __IsHistoricalMonth = 1 && __Variance >= 0, 
+				        __RelativeVariance, 
+				        BLANK() 
+				    )
+				
+				RETURN __Result
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			formatStringDefinition = "+0.0%;-0.0%;0.0%"
+
+		measure '10. Data label Value neg. rel. var. %' = ```
+				
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __Actual = [02. Actual Value]
+				VAR __Comparison = [03. Comparison Value]
+				VAR __Variance = __Actual - __Comparison
+				VAR __RelativeVariance = DIVIDE ( __Variance, __Comparison )
+				
+				VAR __Result = 
+				    IF ( 
+				        __IsHistoricalMonth = 1 && __Variance < 0, 
+				        __RelativeVariance, 
+				        BLANK() 
+				    )
+				
+				RETURN __Result
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			formatStringDefinition = "+0.0%;-0.0%;0.0%"
+
+		measure '11. Upper Bound error bar pos. rel. var. %' = ```
+				
+				// Scale (×1.5): making the bars longer and more prominent.
+				// Cap (50%): avoids overlaps when months have very large % deltas.
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __RelativeVariance = [09. Data label Value pos. rel. var. %]
+				VAR __MaxBarLength = [06. Max Value of Columns] * 1.5
+				VAR __MaxCap = 0.5
+				VAR __Result = 
+				    IF(
+				        __IsHistoricalMonth = 1,
+				        MIN(__RelativeVariance, __MaxCap) * __MaxBarLength,
+				        BLANK()
+				        )
+				RETURN __Result
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '12. Lower Bound error bar neg. rel. var. %' = ```
+				
+				// Scale (×1.5): making the bars longer and more prominent.
+				// Cap (50%): avoids overlaps when months have very large % deltas.
+				VAR __IsHistoricalMonth = [01. Month ≤ Selected Month]
+				VAR __RelativeVariance = [10. Data label Value neg. rel. var. %]
+				VAR __MaxBarLength = [06. Max Value of Columns] * 1.5
+				VAR __MaxCap = -0.5
+				VAR __Result = 
+				    IF(
+				        __IsHistoricalMonth = 1,
+				        MAX(__RelativeVariance, __MaxCap) * __MaxBarLength,
+				        BLANK()
+				        )
+				RETURN __Result
+				```
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '13. Data label Position pos. rel var. %' =
+				
+				IF (
+				    [11. Upper Bound error bar pos. rel. var. %] >= 0,
+				    [11. Upper Bound error bar pos. rel. var. %] + [07. Ref. line Position pos. rel. var %]
+				)
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '14. Data label Position neg. rel var. %' =
+				
+				IF (
+				    [12. Lower Bound error bar neg. rel. var. %] < 0,
+				    [12. Lower Bound error bar neg. rel. var. %] + [08. Ref. line Position neg. rel. var %]
+				)
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+		measure '15. Max Y-axis Value' =
+				
+				// This measure calculates the maximum Y-axis value needed for the visual and then increases it slightly to guarantee enough space for data labels
+				MAXX (
+				    ALLSELECTED (
+				        'dim_calendar_supplemental'[Month Number],
+				        'dim_calendar_supplemental'[Month]
+				    ),
+				    [13. Data label Position pos. rel var. %]
+				) * 1.1
+			displayFolder: __TMDL Column Variance Chart
+
+			annotation PBI_FormatHint = {"isGeneralNumber":true}
+
