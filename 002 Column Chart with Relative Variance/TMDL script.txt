@@ -6,8 +6,8 @@ createOrReplace
 				
 				// This measure checks whether the month from the supplemental date table is less than or equal to the month currently selected in the main date table
 				// Used as filter in measures to limit Data Labels so they are only shown up to the selected month
-				VAR __SelectedMonth = MAX ( dim_calendar[Date] )
-				VAR __SupplMonth = MAX ( dim_calendar_supplemental[Date] )
+				VAR __SelectedMonth = MAX ( dim_calendar[Month Number] )
+				VAR __SupplMonth = MAX ( dim_calendar_supplemental[Month Number] )
 				
 				VAR __Result = 
 				    IF ( 
